@@ -95,9 +95,9 @@ Project structure:
 lib/
 
 ├── core/
-│   ├── network/
+│   ├── components/
 │   ├── utils/
-│   └── widgets/
+│   └── req_client.dart
 │
 ├── features/
 │   └── home/
