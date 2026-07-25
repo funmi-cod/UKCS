@@ -1,15 +1,45 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:ukcs_app/core/utils/enums/view_status.dart';
+import 'package:ukcs_app/core/utils/utilities.dart';
+import 'package:ukcs_app/features/home/presentation/provider/home_provider.dart';
+import 'package:ukcs_app/features/home/presentation/state/home_state.dart';
+import 'package:ukcs_app/features/home/presentation/widgets/home_shimmer.dart';
 
-class HomePage extends StatelessWidget {
-  HomePage({super.key});
+class HomePage extends ConsumerStatefulWidget {
+  const HomePage({super.key});
+
+  @override
+  ConsumerState<HomePage> createState() => _CrimeHomePageState();
+}
+
+class _CrimeHomePageState extends ConsumerState<HomePage> {
   final TextEditingController postcodeController = TextEditingController();
   @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      fetchCrimeHistory(postcode: "SE13 6JP");
+    });
+  }
+
+  /// Fetches crime data using the entered UK postcode.
+  /// The ViewModel handles postcode conversion for the coordinates needed in crime API call.
+  void fetchCrimeHistory({required String postcode}) async {
+    await ref.read(homeViewModelProvider.notifier).getCrimeHistory(postcode);
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final isDesktop = MediaQuery.of(context).size.width > 900;
+
+    // Listen for state changes (loading, success, error)
+    final state = ref.watch(homeViewModelProvider);
     return Scaffold(
       backgroundColor: const Color(0xffF7F9FC),
       body: Center(
         child: SingleChildScrollView(
-          padding: EdgeInsets.all(16),
+          padding: const EdgeInsets.all(32),
           child: ConstrainedBox(
             constraints: const BoxConstraints(maxWidth: 1200),
             child: Column(
@@ -28,7 +58,7 @@ class HomePage extends StatelessWidget {
                   style: TextStyle(color: Colors.grey.shade600, fontSize: 16),
                 ),
 
-                const SizedBox(height: 30),
+                const SizedBox(height: 32),
 
                 /// Search Card
                 /// Allows users to enter a postcode and trigger crime search
@@ -58,7 +88,14 @@ class HomePage extends StatelessWidget {
                       SizedBox(
                         height: 50,
                         child: ElevatedButton.icon(
-                          onPressed: () {},
+                          onPressed: () {
+                            // Basic validation before making API request
+                            if (postcodeController.text.trim().length > 5) {
+                              fetchCrimeHistory(
+                                postcode: postcodeController.text.trim(),
+                              );
+                            }
+                          },
                           icon: const Icon(Icons.search),
                           label: const Text("Search"),
                           style: ElevatedButton.styleFrom(
@@ -75,125 +112,9 @@ class HomePage extends StatelessWidget {
 
                 const SizedBox(height: 30),
 
-                /// Summary Cards
-                Wrap(
-                  spacing: 20,
-                  runSpacing: 20,
-                  children: [
-                    _summaryCard(
-                      title: "Total Crimes",
-                      value: "45",
-                      icon: Icons.warning_amber,
-                    ),
-
-                    _summaryCard(
-                      title: "Categories",
-                      value: "45",
-                      icon: Icons.category,
-                    ),
-
-                    _summaryCard(
-                      title: "Latest Month",
-                      value: "45",
-                      icon: Icons.calendar_month,
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 32),
-                const Text(
-                  "Location Overview",
-                  style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
-                ),
-
+                // Handles loading, error and successful API states
+                _buildMainContent(isDesktop, state),
                 const SizedBox(height: 20),
-
-                Wrap(
-                  spacing: 20,
-                  runSpacing: 20,
-                  children: [
-                    _locationCard("Postcode", 'SE7 8JH', Icons.location_on),
-
-                    _locationCard("District", 'Combe', Icons.location_city),
-
-                    _locationCard("Region", 'London', Icons.map),
-
-                    _locationCard("Police Force", 'Combe', Icons.local_police),
-                  ],
-                ),
-
-                const SizedBox(height: 40),
-
-                const Text(
-                  "Crime Categories",
-                  style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
-                ),
-
-                const SizedBox(height: 20),
-
-                /// Displays crime categories ranked by occurrence.
-                /// Data is grouped in the ViewModel to avoid expensive calculations during build.
-                Container(
-                  padding: const EdgeInsets.all(24),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(18),
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      ListView.builder(
-                        shrinkWrap: true,
-                        physics: const NeverScrollableScrollPhysics(),
-                        itemCount: 6,
-                        itemBuilder: (context, index) {
-                          return Column(
-                            children: [
-                              Padding(
-                                padding: const EdgeInsets.symmetric(
-                                  vertical: 12,
-                                ),
-                                child: Row(
-                                  children: [
-                                    Expanded(
-                                      child: Text(
-                                        "Robbery",
-                                        style: const TextStyle(
-                                          fontSize: 15,
-                                          fontWeight: FontWeight.w600,
-                                        ),
-                                      ),
-                                    ),
-
-                                    Container(
-                                      padding: const EdgeInsets.symmetric(
-                                        horizontal: 14,
-                                        vertical: 8,
-                                      ),
-                                      decoration: BoxDecoration(
-                                        color: Colors.blue.shade50,
-                                        borderRadius: BorderRadius.circular(20),
-                                      ),
-                                      child: Text(
-                                        "58",
-                                        style: const TextStyle(
-                                          fontWeight: FontWeight.bold,
-                                          color: Colors.blue,
-                                        ),
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-
-                              if (index != 6 - 1) const Divider(),
-                            ],
-                          );
-                        },
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 40),
 
                 /// Info section
                 Container(
@@ -223,6 +144,205 @@ class HomePage extends StatelessWidget {
         ),
       ),
     );
+  }
+
+  Widget _buildMainContent(bool isDesktop, HomeState state) {
+    // Show shimmer while data is loading
+    if (state.status == ViewStatus.loading) {
+      return HomeShimmer();
+    }
+
+    // Display API error message
+    if (state.status == ViewStatus.error) {
+      return Container(
+        padding: const EdgeInsets.all(24),
+        width: double.infinity,
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(18),
+        ),
+        child: Column(
+          children: [
+            Text(
+              state.message,
+              style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+            ),
+            Text(
+              "Try again",
+              style: TextStyle(fontSize: 14, fontWeight: FontWeight.w400),
+            ),
+          ],
+        ),
+      );
+    }
+    // Display view when crime data has been successfully loaded
+    if (state.status == ViewStatus.success) {
+      // when data is empty
+      if ((state.data ?? []).isEmpty) {
+        return Container(
+          padding: const EdgeInsets.all(24),
+          width: double.infinity,
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(18),
+          ),
+          child: Text(
+            state.message,
+            style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+          ),
+        );
+      }
+      if ((state.data ?? []).isNotEmpty) {
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            /// Summary Cards
+            Wrap(
+              spacing: 20,
+              runSpacing: 20,
+              children: [
+                _summaryCard(
+                  title: "Total Crimes",
+                  value: state.data!.length.toString(),
+                  icon: Icons.warning_amber,
+                ),
+
+                _summaryCard(
+                  title: "Categories",
+                  value: state.categories!.length.toString(),
+                  icon: Icons.category,
+                ),
+
+                _summaryCard(
+                  title: "Latest Month",
+                  value: Utilities.formatMonth(state.latestMonth ?? ''),
+                  icon: Icons.calendar_month,
+                ),
+              ],
+            ),
+            const SizedBox(height: 32),
+            const Text(
+              "Location Overview",
+              style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
+            ),
+
+            const SizedBox(height: 20),
+
+            Wrap(
+              spacing: 20,
+              runSpacing: 20,
+              children: [
+                _locationCard(
+                  "Postcode",
+                  state.result?.postcode ?? '',
+                  Icons.location_on,
+                ),
+
+                _locationCard(
+                  "District",
+                  state.result?.adminDistrict ?? '',
+                  Icons.location_city,
+                ),
+
+                _locationCard("Region", state.result?.region ?? '', Icons.map),
+
+                _locationCard(
+                  "Police Force",
+                  state.result?.pfa ?? '',
+                  Icons.local_police,
+                ),
+              ],
+            ),
+
+            const SizedBox(height: 40),
+
+            const Text(
+              "Crime Categories",
+              style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
+            ),
+
+            const SizedBox(height: 20),
+
+            /// Displays crime categories ranked by occurrence.
+            /// Data is grouped in the ViewModel to avoid expensive calculations during build.
+            Container(
+              padding: const EdgeInsets.all(24),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(18),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  ListView.builder(
+                    shrinkWrap: true,
+                    physics: const NeverScrollableScrollPhysics(),
+                    itemCount: state.categories?.length,
+                    itemBuilder: (context, index) {
+                      final entry = state.categories![index];
+
+                      final category = entry.key;
+                      final data = entry.value;
+
+                      return Column(
+                        children: [
+                          Padding(
+                            padding: const EdgeInsets.symmetric(vertical: 12),
+                            child: Row(
+                              children: [
+                                Expanded(
+                                  child: Text(
+                                    category
+                                        .split("-")
+                                        .map(
+                                          (e) =>
+                                              e[0].toUpperCase() +
+                                              e.substring(1),
+                                        )
+                                        .join(" "),
+                                    style: const TextStyle(
+                                      fontSize: 15,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                ),
+
+                                Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 14,
+                                    vertical: 8,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: Colors.blue.shade50,
+                                    borderRadius: BorderRadius.circular(20),
+                                  ),
+                                  child: Text(
+                                    data.toString(),
+                                    style: const TextStyle(
+                                      fontWeight: FontWeight.bold,
+                                      color: Colors.blue,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+
+                          if (index != state.categories!.length - 1)
+                            const Divider(),
+                        ],
+                      );
+                    },
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 40),
+          ],
+        );
+      }
+    }
+    return SizedBox.shrink();
   }
 
   Widget _locationCard(String title, String value, IconData icon) {
