@@ -1,16 +1,17 @@
 import 'package:dio/dio.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:ukcs_app/core/components/utils/enums/view_status.dart';
+import 'package:ukcs_app/core/utils/enums/view_status.dart';
 import 'package:ukcs_app/features/home/data/model/crime_model.dart';
 import 'package:ukcs_app/features/home/data/model/postcode_model.dart';
 import 'package:ukcs_app/features/home/data/repository/home_repo.dart';
 import 'package:ukcs_app/features/home/presentation/state/home_state.dart';
 
 class HomeViewModel extends Notifier<HomeState> {
-  HomeRepo get _repo => ref.read(homeRepoProvider);
+  late final HomeRepo _repo;
   @override
   HomeState build() {
+    _repo = ref.watch(homeRepoProvider);
     return const HomeState();
   }
 

@@ -1,30 +1,78 @@
-// This is a basic Flutter widget test.
-//
-// To perform an interaction with a widget in your test, use the WidgetTester
-// utility in the flutter_test package. For example, you can send tap and scroll
-// gestures. You can also use WidgetTester to find child widgets in the widget
-// tree, read text, and verify that the values of widget properties are correct.
-
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-
+import 'package:mocktail/mocktail.dart';
+import 'package:dio/dio.dart';
+import 'package:ukcs_app/features/home/data/repository/home_repo.dart';
 import 'package:ukcs_app/main.dart';
 
+class MockHomeRepo extends Mock implements HomeRepo {}
+
 void main() {
-  testWidgets('Counter increments smoke test', (WidgetTester tester) async {
+  late MockHomeRepo mockHomeRepo;
+
+  setUp(() {
+    mockHomeRepo = MockHomeRepo();
+  });
+
+  testWidgets('UK Crime & Safety Explorer page loads and renders title', (
+    WidgetTester tester,
+  ) async {
+    // Arrange
+    final postcodeResponse = Response(
+      requestOptions: RequestOptions(path: ''),
+      data: {
+        "status": 200,
+        "result": {
+          "postcode": "SE13 6JP",
+          "latitude": 51.464,
+          "longitude": -0.015,
+          "admin_district": "Lewisham",
+          "region": "London",
+          "pfa": "Metropolitan Police",
+        },
+      },
+      statusCode: 200,
+    );
+    final crimeResponse = Response(
+      requestOptions: RequestOptions(path: ''),
+      data: [],
+      statusCode: 200,
+    );
+
+    when(
+      () => mockHomeRepo.locationPoints(postcode: any(named: 'postcode')),
+    ).thenAnswer((_) async => postcodeResponse);
+    when(
+      () => mockHomeRepo.locationCrimeHistory(
+        lat: any(named: 'lat'),
+        long: any(named: 'long'),
+      ),
+    ).thenAnswer((_) async => crimeResponse);
+
     // Build our app and trigger a frame.
-    await tester.pumpWidget(const MyApp());
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [homeRepoProvider.overrideWithValue(mockHomeRepo)],
+        child: const MyApp(),
+      ),
+    );
 
-    // Verify that our counter starts at 0.
-    expect(find.text('0'), findsOneWidget);
-    expect(find.text('1'), findsNothing);
-
-    // Tap the '+' icon and trigger a frame.
-    await tester.tap(find.byIcon(Icons.add));
+    // Re-trigger frames to let post-frame callback run
     await tester.pump();
+    await tester.pump(const Duration(milliseconds: 100));
 
-    // Verify that our counter has incremented.
-    expect(find.text('0'), findsNothing);
-    expect(find.text('1'), findsOneWidget);
+    // Verify title and subtitle are present
+    expect(find.text("UK Crime & Safety Explorer"), findsOneWidget);
+    expect(
+      find.text(
+        "Explore recent street-level crime data around any UK postcode",
+      ),
+      findsOneWidget,
+    );
+
+    // Verify search text field is present
+    expect(find.byType(TextField), findsOneWidget);
+    expect(find.text("Search"), findsOneWidget);
   });
 }
